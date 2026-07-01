@@ -79,7 +79,7 @@ def check_node(name, tree):
 def neighbour_genus(query, neighbour, df, rep_df,distance_matrix):
     '''
     Input: Neighbours of query and query
-    Output: Genus of neighbours
+    Output: Genus of neighbours, neighbour it was calculated from
         
     Determines the genus of closest neighbour; used to determine which genus it should belong to. Selected as closest neighbour, unless
     closest neighbour is far away. Iterates through all neighbours until valid genus is found, else accepts new genus.
@@ -87,10 +87,11 @@ def neighbour_genus(query, neighbour, df, rep_df,distance_matrix):
     
     out = "New_genus"
     for n in neighbour:
-        if df.at[str(n).replace("'","").replace(" ","_"), "Genus"] != "New_genus" and distance_matrix(query.taxon, n) < 0.6:
-            ic(df.at[str(n).replace("'","").replace(" ","_"), "Genus"], neighbour[0])
-            return df.at[str(n).replace("'","").replace(" ","_"), "Genus"]
-    return out
+        if n != "FO818745":
+            if df.at[str(n).replace("'","").replace(" ","_"), "Genus"] != "New_genus" and distance_matrix(query.taxon, n) < 0.6:
+                ic(df.at[str(n).replace("'","").replace(" ","_"), "Genus"], neighbour[0])
+                return df.at[str(n).replace("'","").replace(" ","_"), "Genus"], n
+    return out, None
 
 
 def neighbour_search(query, tree, distance_matrix, n):
@@ -121,7 +122,7 @@ def neighbour_search(query, tree, distance_matrix, n):
 
 def new_genus_cluster(df, distance_matrix, tree,suffix, d = 0.2, threshold = 4):
     '''
-    Predicts clusters of "New Genus", assinging them names NGC_X, allowing them to be distinguished when visualiszing the tree. Singletons
+    Predicts clusters of "New Genus", assinging them names Maybevirus_suffixX, allowing them to be distinguished when visualiszing the tree. Singletons
     remain under the label New_genus. Clusters are determined by low distance New_genus neighbours. Using distance of 0.2 for now, though
     a source or any better rationale would be useful. Index of suffix starts at 1.
 
@@ -211,7 +212,7 @@ def colour_code_output(df, original_df, original = False):
             }
         output.append(d)
 
-    # Add in the original genes
+    # Add in the original phage
     if not original: 
         for index, row in df.iterrows():
             d = {"Phage": index,
@@ -226,7 +227,8 @@ def size_dataset_output(original_df):
     Outputs phage size information for iTOL; specific output (label) needs checking. Ignores the representative genomes.
     '''
     temp_df = []
-    o_sub_df = original_df[original_df["Representative_phage"] == False]
+    #o_sub_df = original_df[original_df["Representative_phage"] == False]
+    o_sub_df = original_df
     for index, row in o_sub_df.iterrows():
         size = row["Genome size"] / 1000
         if size <= 50:
@@ -284,6 +286,7 @@ def main():
     parser.add_argument("-i","--itol", help="Changes the output format to be compatable with iTOL dataset, color strip. Currently supports ~125 separate genera", action="store_true")
     parser.add_argument("-g","--genuscluster", help="Calculate clusters of new genus, under the label Maybevirus.", action="store_true")
     parser.add_argument("-n","--name", help="Provides the suffix added to new genera groups (Maybevirus_SUFFIX), allowing for dataset specifc names. Default is NGC")
+    parser.add_argument("-q","--query", help="Input the name of a node to output a list of neighours. Bypasses usual function of the script.")
     args = parser.parse_args()
 
     PATH = args.path + "/"
@@ -322,7 +325,7 @@ def main():
     try:
         rep_df = pd.read_csv("Tree_check_metadata/representative_phages.tsv", sep="\t")
         rep_df = rep_df.rename(columns = {"Accession":"Genome","Genome":"DNA_Type"})
-        rep_df["Genome"] = rep_df["Genome"].apply(lambda x: x.split('.',1)[0].split(' ',1)[0]) # Formatting for merging names with fasta headers
+        rep_df["Genome"] = rep_df["Genome"].apply(lambda x: str(x).split('.',1)[0].split(' ',1)[0]) # Formatting for merging names with fasta headers
         rep_df = read_fasta_length("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df, True)
         rep_df = read_fasta_name("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df)
         rep_df["Representative_phage"] = True
@@ -334,7 +337,6 @@ def main():
     stat_df = pd.read_csv("Tree_check_metadata/1612_phage_genome_stats.tsv", sep="\t")
     stat_df.set_index("Genus", inplace=True)
     known_genus = stat_df.index.values.tolist()
-    
 
     ## Variable Setup
     
@@ -346,73 +348,86 @@ def main():
     
     ## Main Script
     new_genus_subset = df[df["Genus"] == "New_genus"]
-    distance_matrix = tree.phylogenetic_distance_matrix()
-    print("\nDistance Matrix Made\n")
-    
-    for index, row in new_genus_subset.iterrows(): # Iterate over phages labelled as new_genus
-        correct_flag = False # Reset output flags
-        error_flag = False 
-
-        test_node = check_node(str(index).replace("_"," "), tree) # Query checked for existence and stored
-
-        ic("Query:",test_node.taxon)
-
-        neighbours = neighbour_search(test_node, tree, distance_matrix, n) # Find closest {n = 5} neighbours
-        q_size = df.at[index,"Genome size"] / 1000 # df genome size in bp, not kbp
+    if not new_genus_subset.empty and args.query == None:
+        distance_matrix = tree.phylogenetic_distance_matrix()
+        print("\nDistance Matrix Made\n")
         
-        if len(neighbours) > 0: # If a neighbour has been found (should always be the case)
+        for index, row in new_genus_subset.iterrows(): # Iterate over phages labelled as new_genus
+            correct_flag = False # Reset output flags
+            error_flag = False 
+
+            test_node = check_node(str(index).replace("_"," "), tree) # Query checked for existence and stored
+
+            ic("Query:",test_node.taxon)
+
+            neighbours = neighbour_search(test_node, tree, distance_matrix, n) # Find closest {n = 5} neighbours
+            q_size = df.at[index,"Genome size"] / 1000 # df genome size in bp, not kbp
             
-            n_genus = neighbour_genus(test_node,neighbours, df, rep_df,distance_matrix) # Determine genus of neighbours
-            ic("Neighbour Genus:",n_genus)
-            if n_genus in known_genus and n_genus != "Unclassified": # If median already calculated in statistics dataframe, use that.
-                n_median = stat_df.at[n_genus,"Median Genome Length (KB)"]
-                update_count += 1 # Assume update
-            else: # Alternative: New_genus or not in database; median calculated from the phylo tree
-                n_size = []
-                for node in neighbours:
-                    n_size.append(int(df.at[str(node).replace("'","").replace(" ","_"),"Genome size"]) / 1000)
-                n_median = median(n_size)
-                if n_genus == "New_genus":
+            if len(neighbours) > 0: # If a neighbour has been found (should always be the case)
+                
+                n_genus, neighbour = neighbour_genus(test_node,neighbours, df, rep_df,distance_matrix) # Determine genus of neighbours; temp labels query as that genus
+                ic("Neighbour Genus:",n_genus)
+                if n_genus in known_genus and n_genus != "Unclassified": # If median already calculated in statistics dataframe, use that.
+                    n_median = stat_df.at[n_genus,"Median Genome Length (KB)"]
+                    update_count += 1 # Assume update
+                else: # Alternative: New_genus or not in database; median calculated from the phylo tree
+                    n_size = []
+                    for node in neighbours:
+                        n_size.append(int(df.at[str(node).replace("'","").replace(" ","_"),"Genome size"]) / 1000)
+                    n_median = median(n_size)
+                    if n_genus == "New_genus":
+                        correct_flag = True
+                    else:
+                        update_count += 1 # Otherwise not in database, but still needed updating into new_genus
+                ic("Target Size", n_median * criteria)
+                ic("Query Size:",q_size)
+                # if the query is within criteria% of the median [or larger] and is not phlyogenetically close to its neighbour, return label of new_genus
+                if (n_median * criteria) <= q_size and n_genus != "New_genus" and distance_matrix(test_node.taxon, neighbour) > 0.1:
+                    
+                    update_count -= 1 # Not being updated if being kept as New_genus
                     correct_flag = True
-                else:
-                    update_count += 1 # Otherwise not in database, but still needed updating into new_genus
-            ic("Target Size", n_median * criteria)
-            ic("Query Size:",q_size)
-            if (n_median * criteria <= q_size <= n_median * (2-criteria)) and n_genus != "New_genus": # if the query is within criteria% of the median, likely new genus (not incomplete)
-                update_count -= 1 # Not being updated if being kept as New_genus
-                correct_flag = True
-                n_genus = "New_genus" # Used to override neighbouring genus for output
-                ic("Query marked as new genus")
-            complete_count += 1
-        else: # if no neighbours, something happened
-            fail_count += 1
-            error_flag = True    
-        d = {"Phage":str(test_node.taxon).replace("'","").replace(" ","_"),
-                "Propose New Genus":correct_flag,
-                "Proposed Genus":n_genus,
-                "Error":error_flag
-            }
-        output_df.append(d)
-    output_df = pd.DataFrame(output_df)
-    output_df.set_index("Phage", inplace=True) # Current DB is a simple output reporting the new genus phages.
-    if args.genuscluster:
-        output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name)
+                    n_genus = "New_genus" # Used to override neighbouring genus for output
+                    ic("Query marked as new genus")
+                complete_count += 1
+            else: # if no neighbours, something happened
+                fail_count += 1
+                error_flag = True    
+            d = {"Phage":str(test_node.taxon).replace("'","").replace(" ","_"),
+                    "Propose New Genus":correct_flag,
+                    "Proposed Genus":n_genus,
+                    "Error":error_flag
+                }
+            output_df.append(d)
+        output_df = pd.DataFrame(output_df)
+        output_df.set_index("Phage", inplace=True) # Current DB is a simple output reporting the new genus phages.
+        if args.genuscluster:
+            output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name)
+        else:
+            num_new_genus = "NA"
+        
+        if args.itol: # ITOL input (formatting)
+            output_df_itol = colour_code_output(output_df, df) # For use in ITol (copy/paste tsv into dataset)
+            output_df_itol.to_csv("tree_checker_output_itol_genus.tsv",sep="\t", index=False)
+            size_df = size_dataset_output(df)
+            size_df.to_csv("tree_checker_output_itol_size.tsv",sep="\t",index=False)
+        try:
+            output_df = tmp_output(output_df,df) # If provided with a TMP output, return an output in the same format (prefered!)
+        except:
+            print("\nNote: Outputting in basic format: No TMP file used.")
+        output_df.to_csv("tree_checker_output.tsv",sep="\t")
+        if args.log:
+            print(f"\nSuccessfully parsed {complete_count} labelled New_genus\nFailed to parse {fail_count}\nUpdated {update_count} to neighbouring genus.\nPredict {num_new_genus} new genera clusters.")
+        print("\n>>>\tResults exported to file 'tree_checker_output.tsv'")
     else:
-        num_new_genus = "NA"
-    
-    if args.itol: # ITOL input (formatting)
-        output_df_itol = colour_code_output(output_df, df) # For use in ITol (copy/paste tsv into dataset)
-        output_df_itol.to_csv("tree_checker_output_itol_genus.tsv",sep="\t")
-        size_df = size_dataset_output(df)
-        size_df.to_csv("tree_checker_output_itol_size.tsv",sep="\t",index=False)
-    try:
-        output_df = tmp_output(output_df,df) # If provided with a TMP output, return an output in the same format (prefered!)
-    except:
-        print("\nNote: Outputting in basic format: No TMP file used.")
-    output_df.to_csv("tree_checker_output.tsv",sep="\t")
-    if args.log:
-        print(f"\nSuccessfully parsed {complete_count} labelled New_genus\nFailed to parse {fail_count}\nUpdated {update_count} to neighbouring genus.\nPredict {num_new_genus} new genera clusters.")
-    print("\n>>>\tResults exported to file 'tree_checker_output.tsv'")
+        print("\nNo Phages labelled 'New_genus' detected; nothing to compute.")
+        if args.query != None:
+            distance_matrix = tree.phylogenetic_distance_matrix()
+            print("\nDistance Matrix Made\n")
+            test = check_node(str(args.query).replace("_"," "),tree)
+            neigh = neighbour_search(test, tree, distance_matrix, n=9)
+            print(neigh)
+        #size_df = size_dataset_output(df)
+        #size_df.to_csv("tree_checker_output_itol_size.tsv",sep="\t",index=False)
     sys.exit(0)
         
 
