@@ -23,6 +23,7 @@ import argparse # Testing with command line flag implementation
 from icecream import ic # Debugging
 from numpy import median # Used for median of unrecognised genus (or new_genus)
 from Bio import SeqIO # Used to parse fasta used to make tree to calculate genome lengths.
+import os # File finding
 
 def read_file_tree(file_name):
     '''
@@ -141,7 +142,7 @@ def new_genus_cluster(df, distance_matrix, tree,suffix, d = 0.2, threshold = 4):
             query = check_node(index.replace("_"," "), tree) # Obtain the leaf data of the current query
             for node in tree.taxon_namespace:
                 string_node = str(node).replace("'","").replace(" ","_")
-                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df.index):
+                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df.index) and df.at[node,"Proposed Genus"] == "New_genus":
                     counter += 1
                     temp_store.append(string_node)
             if counter >= threshold: # If a leaf has (threshold=4) or more new_genus neighbours, mark as a cluster
@@ -189,18 +190,18 @@ def colour_code_output(df, original_df, original = False):
     # An array of colours; should be (mostly) colour-blind friendly.
     col_dict = {}
     c = 0
+    found_genus = [] # Comparisson with representative phages can introduce genera not found in the original df
     o_sub_df = original_df[original_df["Representative_phage"] == False]
     for genus in o_sub_df["Genus"].unique():
-        if genus == "New_genus":
-            col_dict[genus] = "#000000"
-        else:
-            col_dict[genus] = col[c]
-            c += 1
-    if not original:
-        for genus in df["Proposed Genus"].unique(): # "Maybevirus" unique to altered df, separate loop.
-            if genus.startswith("Maybevirus"):
+        col_dict[genus] = col[c]
+        found_genus.append(genus)
+        c += 1
+    if not original: # A small flag to vaugely get a non-changed version of the tree. Debugging only.
+        for genus in df["Proposed Genus"].unique():
+            if genus.startswith("Maybevirus") or genus not in found_genus:
                 col_dict[genus] = col[c]
                 c += 1
+    col_dict["New_genus"] = "#000000"
     output = []
 
     # Add back in the untouched phages
@@ -301,15 +302,24 @@ def main():
     if args.name == None:
         args.name = "NGC"
     ## File Handling
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + "/" + PATH
     try: # Read Tree
-        tree = read_file_tree(PATH + "Output/result/all.bionj.asc.newick")
-        print("Found Tree!\t At: " + PATH + "Output/result/all.bionj.asc.newick")
+        for root, dirs, files in os.walk(dir_path):
+            for file in files:
+                if file.endswith("ll.bionj.asc.newick"):
+                    loc = root+"/"+str(file)
+                    tree = read_file_tree(loc)
+                    print("Found Tree!\t At: " + "/" + PATH + loc.split(PATH)[1])
     except:
         raise ValueError(f"Expected newick file named 'all.bionj.asc.newick' within {PATH}")
     
     try: # Read in Taxonomy Data of Input Phages
-        df = pd.read_csv(PATH + "Summary_taxonomy.tsv", sep="\t")
-        print("Found Metadata!\t At: "+PATH + "Summary_taxonomy.tsv")
+        for root, dirs, files in os.walk(dir_path):
+            for file in files:
+                if file.endswith("ummary_taxonomy.tsv"):
+                    loc = root+"/"+str(file)
+                    df = pd.read_csv(loc, sep="\t")
+                    print("Found Metadata!\t At: "+ "/" + PATH + loc.split(PATH)[1])
         df["Representative_phage"] = False
     except:
         raise ValueError(f"Expected metadata file named Summary_taxonomy.tsv within {PATH}")
@@ -318,8 +328,12 @@ def main():
         print("Using Genome Size from provided metadata.")
     except:
         try:
-            df = read_fasta_length((PATH + "Output/cat/all/all.fasta"),df)
-            print("Found FASTA!\t At: "+PATH + "Output/cat/all/all.fasta")
+            for root, dirs, files in os.walk(dir_path):
+                for file in files:
+                    if file.endswith("all.fasta"):
+                        loc = root+"/"+str(file)
+                        df = read_fasta_length(loc,df)
+            print("Found FASTA!\t At: "+"/" + PATH + loc.split(PATH)[1])
         except:
             raise ValueError(f"Expected fasta input within ViPTree Output")
     try:
@@ -345,10 +359,10 @@ def main():
     complete_count = 0
     update_count = 0
     output_df = []
-    
     ## Main Script
     new_genus_subset = df[df["Genus"] == "New_genus"]
     if not new_genus_subset.empty and args.query == None:
+        print("\nMaking Distance Matrix...")
         distance_matrix = tree.phylogenetic_distance_matrix()
         print("\nDistance Matrix Made\n")
         
