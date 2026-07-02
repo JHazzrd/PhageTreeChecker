@@ -3,7 +3,8 @@ Script to determine if provided label of new_genus for a phage is true or false.
 phage genuses. If genus is unknown, calculated median of neighbouring genomes is used. Generally, the number of neighbours is not significant for calcuation;
 only the neighbouring genus has to be calcuateed (for the target value to then be looked up). Neighbouring genus is considered to be the genus of the closest phage,
 unless the closest neighbour is > 0.6 away, in which case it is considered that the query is a new genus. New genus clusters are also calculated, determining clusters of
-new_genus within a distance of 0.2.
+new_genus within a distance of 0.2. Phages originally under the new_genus label are also checked for size; those under 3kb have an additional label noting that they may
+be fragments / incomplete genomes.
 
 Includes also a list of representative phages, encompassing ~1500 genera. These are used for when a tree is created with such a list, for more exhaustive new_genera checking.
 These are ignored for the final output, and are generally invisible. The script works in such a way that only a taxmyphage output of the query phage(s) needs to be provided, rather
@@ -282,7 +283,8 @@ def tmp_output(df, original_df):
             original_df.at[index,"Genus"] = row["Proposed Genus"]
             original_df.at[index,"Message"] = str(f"Phage determined to be in a new genus temporarily labelled {row['Proposed Genus']} due to high similarity with other phages labelled as new genus.")
         if row["Fragment"]:
-            original_df.at[index,"Message"] = ("Genome size <3kb, this phage is likely not complete and is potentially a fragment.")
+            original_message = original_df.at[index,"Message"]
+            original_df.at[index,"Message"] = (original_message + " Genome size <3kb, this phage is likely not complete and is potentially a fragment.")
     original_df = original_df[original_df.Representative_phage == False]
     return original_df.drop(["Unnamed: 0","Representative_phage","Phage","DNA_Type"], axis = 1) # Remove redundant values from metadata merge
 
