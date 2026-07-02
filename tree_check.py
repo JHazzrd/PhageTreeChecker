@@ -125,7 +125,8 @@ def new_genus_cluster(df, distance_matrix, tree,suffix, d = 0.2, threshold = 4):
     '''
     Predicts clusters of "New Genus", assinging them names Maybevirus_suffixX, allowing them to be distinguished when visualiszing the tree. Singletons
     remain under the label New_genus. Clusters are determined by low distance New_genus neighbours. Using distance of 0.2 for now, though
-    a source or any better rationale would be useful. Index of suffix starts at 1.
+    a source or any better rationale would be useful. Index of suffix starts at 1. Information is best used in conjunction with labelling that does not include
+    Maybevirus, as solitary labels amidst clusters of new_genus can be over-written.
 
 
     Input: The altered dataframe for the names of phages and their genus for reference, distance matrix and tree for distance.
@@ -142,7 +143,7 @@ def new_genus_cluster(df, distance_matrix, tree,suffix, d = 0.2, threshold = 4):
             query = check_node(index.replace("_"," "), tree) # Obtain the leaf data of the current query
             for node in tree.taxon_namespace:
                 string_node = str(node).replace("'","").replace(" ","_")
-                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df.index) and df.at[node,"Proposed Genus"] == "New_genus":
+                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df.index):
                     counter += 1
                     temp_store.append(string_node)
             if counter >= threshold: # If a leaf has (threshold=4) or more new_genus neighbours, mark as a cluster
@@ -213,12 +214,18 @@ def colour_code_output(df, original_df, original = False):
             }
         output.append(d)
 
-    # Add in the original phage
+    # Add in the changed phage
     if not original: 
         for index, row in df.iterrows():
+            if not row["Fragment"]: # Allows visual distinguishing of fragments in itol (without having to also look at genome length values)
+                colour = col_dict[row["Proposed Genus"]]
+                genus = row["Proposed Genus"]
+            else:
+                colour = "#FFE1FA"
+                genus = "Potential Fragment"
             d = {"Phage": index,
-                 "Colour":col_dict[row["Proposed Genus"]],
-                 "Genus":row["Proposed Genus"]
+                 "Colour":colour,
+                 "Genus":genus
                 }
             output.append(d)
     return pd.DataFrame(output)
@@ -274,6 +281,8 @@ def tmp_output(df, original_df):
         elif row["Proposed Genus"].startswith("Maybevirus"):
             original_df.at[index,"Genus"] = row["Proposed Genus"]
             original_df.at[index,"Message"] = str(f"Phage determined to be in a new genus temporarily labelled {row['Proposed Genus']} due to high similarity with other phages labelled as new genus.")
+        if row["Fragment"]:
+            original_df.at[index,"Message"] = ("Genome size <3kb, this phage is likely not complete and is potentially a fragment.")
     original_df = original_df[original_df.Representative_phage == False]
     return original_df.drop(["Unnamed: 0","Representative_phage","Phage","DNA_Type"], axis = 1) # Remove redundant values from metadata merge
 
@@ -302,6 +311,7 @@ def main():
     if args.name == None:
         args.name = "NGC"
     ## File Handling
+        
     dir_path = os.path.dirname(os.path.realpath(__file__)) + "/" + PATH
     try: # Read Tree
         for root, dirs, files in os.walk(dir_path):
@@ -309,7 +319,7 @@ def main():
                 if file.endswith("ll.bionj.asc.newick"):
                     loc = root+"/"+str(file)
                     tree = read_file_tree(loc)
-                    print("Found Tree!\t At: " + "/" + PATH + loc.split(PATH)[1])
+                    print("Found Tree!\t At: "+ PATH + loc.split(PATH)[1])
     except:
         raise ValueError(f"Expected newick file named 'all.bionj.asc.newick' within {PATH}")
     
@@ -319,8 +329,8 @@ def main():
                 if file.endswith("ummary_taxonomy.tsv"):
                     loc = root+"/"+str(file)
                     df = pd.read_csv(loc, sep="\t")
-                    print("Found Metadata!\t At: "+ "/" + PATH + loc.split(PATH)[1])
-        df["Representative_phage"] = False
+                    print("Found Metadata!\t At: "+ PATH + loc.split(PATH)[1])
+        df["Representative_phage"] = False # If file not found, this causes the error
     except:
         raise ValueError(f"Expected metadata file named Summary_taxonomy.tsv within {PATH}")
     try:
@@ -333,7 +343,8 @@ def main():
                     if file.endswith("all.fasta"):
                         loc = root+"/"+str(file)
                         df = read_fasta_length(loc,df)
-            print("Found FASTA!\t At: "+"/" + PATH + loc.split(PATH)[1])
+            print("Found FASTA!\t At: "+ PATH + loc.split(PATH)[1])
+            fasta_length_check = df["Genome size"].head(1) # Fails if file not found
         except:
             raise ValueError(f"Expected fasta input within ViPTree Output")
     try:
@@ -345,10 +356,13 @@ def main():
         rep_df["Representative_phage"] = True
         rep_df.set_index("Genome",inplace=True)
     except:
-        raise ValueError("Expected representative phages found in metadata folder!")
+        raise ValueError("Expected representative phages found in metadata folder! Ensure 'representative_phages.tsv' and 'rep_phage_gen_complete.fasta' exists in Tree_check_metadata")
     df.set_index("Genome", inplace=True)
     df = pd.concat([df, rep_df], ignore_index = False, sort=False) # Values of representative phages added, but labelled so they can be removed from output
-    stat_df = pd.read_csv("Tree_check_metadata/1612_phage_genome_stats.tsv", sep="\t")
+    try:
+        stat_df = pd.read_csv("Tree_check_metadata/1612_phage_genome_stats.tsv", sep="\t")
+    except:
+        raise ValueError("Expected phage statistics in metadata folder! Ensure '1612_phage_genome_stats.tsv' exists in Tree_check_metadata")
     stat_df.set_index("Genus", inplace=True)
     known_genus = stat_df.index.values.tolist()
 
@@ -359,16 +373,20 @@ def main():
     complete_count = 0
     update_count = 0
     output_df = []
+    
     ## Main Script
     new_genus_subset = df[df["Genus"] == "New_genus"]
+    
     if not new_genus_subset.empty and args.query == None:
+        
         print("\nMaking Distance Matrix...")
         distance_matrix = tree.phylogenetic_distance_matrix()
         print("\nDistance Matrix Made\n")
         
         for index, row in new_genus_subset.iterrows(): # Iterate over phages labelled as new_genus
             correct_flag = False # Reset output flags
-            error_flag = False 
+            error_flag = False
+            frag_flag = False
 
             test_node = check_node(str(index).replace("_"," "), tree) # Query checked for existence and stored
 
@@ -396,12 +414,14 @@ def main():
                 ic("Target Size", n_median * criteria)
                 ic("Query Size:",q_size)
                 # if the query is within criteria% of the median [or larger] and is not phlyogenetically close to its neighbour, return label of new_genus
-                if (n_median * criteria) <= q_size and n_genus != "New_genus" and distance_matrix(test_node.taxon, neighbour) > 0.1:
+                if (n_median * criteria) <= q_size and n_genus != "New_genus"and distance_matrix(test_node.taxon, neighbour) > 0.1:
                     
                     update_count -= 1 # Not being updated if being kept as New_genus
                     correct_flag = True
                     n_genus = "New_genus" # Used to override neighbouring genus for output
                     ic("Query marked as new genus")
+                if q_size < 3: # If size is less than 3kb, there is a chance it is just a fragment / not complete (and thus has a new_genus tag)
+                    frag_flag = True
                 complete_count += 1
             else: # if no neighbours, something happened
                 fail_count += 1
@@ -409,16 +429,17 @@ def main():
             d = {"Phage":str(test_node.taxon).replace("'","").replace(" ","_"),
                     "Propose New Genus":correct_flag,
                     "Proposed Genus":n_genus,
-                    "Error":error_flag
+                    "Error":error_flag,
+                    "Fragment":frag_flag
                 }
             output_df.append(d)
         output_df = pd.DataFrame(output_df)
         output_df.set_index("Phage", inplace=True) # Current DB is a simple output reporting the new genus phages.
+        
         if args.genuscluster:
             output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name)
         else:
             num_new_genus = "NA"
-        
         if args.itol: # ITOL input (formatting)
             output_df_itol = colour_code_output(output_df, df) # For use in ITol (copy/paste tsv into dataset)
             output_df_itol.to_csv("tree_checker_output_itol_genus.tsv",sep="\t", index=False)
