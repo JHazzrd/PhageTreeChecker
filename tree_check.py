@@ -22,7 +22,7 @@ import sys
 import pandas as pd # TSV reading
 import argparse # Testing with command line flag implementation
 from icecream import ic # Debugging
-from numpy import median # Used for median of unrecognised genus (or new_genus)
+from numpy import median, std # Used for median of unrecognised genus (or new_genus), as well as standard deviation for distance counts
 from Bio import SeqIO # Used to parse fasta used to make tree to calculate genome lengths.
 import os # File finding
 
@@ -89,10 +89,10 @@ def neighbour_genus(query, neighbour, df, rep_df,distance_matrix):
     
     out = "New_genus"
     for n in neighbour:
-        if n != "FO818745":
-            if df.at[str(n).replace("'","").replace(" ","_"), "Genus"] != "New_genus" and distance_matrix(query.taxon, n) < 0.6:
-                ic(df.at[str(n).replace("'","").replace(" ","_"), "Genus"], neighbour[0])
-                return df.at[str(n).replace("'","").replace(" ","_"), "Genus"], n
+        #if n != "FO818745":
+        if df.at[str(n).replace("'","").replace(" ","_"), "Genus"] != "New_genus" and distance_matrix(query.taxon, n) < 0.6:
+            ic(df.at[str(n).replace("'","").replace(" ","_"), "Genus"], neighbour[0])
+            return df.at[str(n).replace("'","").replace(" ","_"), "Genus"], n
     return out, None
 
 
@@ -288,6 +288,37 @@ def tmp_output(df, original_df):
     original_df = original_df[original_df.Representative_phage == False]
     return original_df.drop(["Unnamed: 0","Representative_phage","Phage","DNA_Type"], axis = 1) # Remove redundant values from metadata merge
 
+def phylo_distance_genera(df, tree, distance_matrix):
+    '''
+    Aim is to calculate the average phylogenetic distance between phages within a genus. This function iterates over all unique genera within the sample
+    and calculates pairwise distances between all phages within each genus. These values are then stored as a mean, median and standard deviations.
+
+    Should be used without any Maybevirus calculations.
+
+    Input: Finalised metadata, tree, distance matrix
+    Output: .tsv with statistical information regarding the genera
+    '''
+
+    genera = df["Genus"].unique().tolist()
+    genera.remove("New_genus")
+    outfile = open("phage_genus_phylo_info.tsv","w")
+    outfile.write("Genus\tMedian\tStandardDeviation\n")
+    
+    for genus in genera:
+        phages = df.index[df["Genus"] == genus].tolist()
+        if len(phages) > 3:
+            c = 1
+            distances = []
+            for n in phages:
+                query = check_node(n.replace("_"," "), tree)
+                for i in range(c,len(phages)):
+                    distances.append(distance_matrix(query.taxon, check_node(phages[i].replace("_"," "),tree).taxon))
+                c += 1
+            outfile.write(f"{genus}\t{median(distances)}\t{std(distances)}\n")
+    outfile.close()
+                
+            
+            
 def main():
     ## Flag Parsing
     parser = argparse.ArgumentParser()
@@ -318,7 +349,7 @@ def main():
     try: # Read Tree
         for root, dirs, files in os.walk(dir_path):
             for file in files:
-                if file.endswith("ll.bionj.asc.newick"):
+                if file == "all.bionj.asc.newick":
                     loc = root+"/"+str(file)
                     tree = read_file_tree(loc)
                     print("Found Tree!\t At: "+ PATH + loc.split(PATH)[1])
@@ -328,7 +359,7 @@ def main():
     try: # Read in Taxonomy Data of Input Phages
         for root, dirs, files in os.walk(dir_path):
             for file in files:
-                if file.endswith("ummary_taxonomy.tsv"):
+                if file == "Summary_taxonomy.tsv":
                     loc = root+"/"+str(file)
                     df = pd.read_csv(loc, sep="\t")
                     print("Found Metadata!\t At: "+ PATH + loc.split(PATH)[1])
@@ -342,19 +373,20 @@ def main():
         try:
             for root, dirs, files in os.walk(dir_path):
                 for file in files:
-                    if file.endswith("all.fasta"):
+                    if str(file) == "all.fasta":
                         loc = root+"/"+str(file)
                         df = read_fasta_length(loc,df)
-            print("Found FASTA!\t At: "+ PATH + loc.split(PATH)[1])
+            
             fasta_length_check = df["Genome size"].head(1) # Fails if file not found
+            print("Found FASTA!\t At: "+ PATH + loc.split(PATH)[1])
         except:
             raise ValueError(f"Expected fasta input within ViPTree Output")
     try:
-        rep_df = pd.read_csv("Tree_check_metadata/representative_phages.tsv", sep="\t")
+        rep_df = pd.read_csv("Tree_check_metadata/representative_phages_check_ready.tsv", sep="\t")
         rep_df = rep_df.rename(columns = {"Accession":"Genome","Genome":"DNA_Type"})
-        rep_df["Genome"] = rep_df["Genome"].apply(lambda x: str(x).split('.',1)[0].split(' ',1)[0]) # Formatting for merging names with fasta headers
-        rep_df = read_fasta_length("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df, True)
-        rep_df = read_fasta_name("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df)
+        #rep_df["Genome"] = rep_df["Genome"].apply(lambda x: str(x).split('.',1)[0].split(' ',1)[0]) # Formatting for merging names with fasta headers
+        #rep_df = read_fasta_length("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df, True)
+        #rep_df = read_fasta_name("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df)
         rep_df["Representative_phage"] = True
         rep_df.set_index("Genome",inplace=True)
     except:
@@ -451,6 +483,7 @@ def main():
             output_df = tmp_output(output_df,df) # If provided with a TMP output, return an output in the same format (prefered!)
         except:
             print("\nNote: Outputting in basic format: No TMP file used.")
+        phylo_distance_genera(output_df, tree, distance_matrix)
         output_df.to_csv("tree_checker_output.tsv",sep="\t")
         if args.log:
             print(f"\nSuccessfully parsed {complete_count} labelled New_genus\nFailed to parse {fail_count}\nUpdated {update_count} to neighbouring genus.\nPredict {num_new_genus} new genera clusters.")
