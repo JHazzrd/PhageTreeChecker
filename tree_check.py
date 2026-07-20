@@ -22,7 +22,7 @@ import sys
 import pandas as pd # TSV reading
 import argparse # Testing with command line flag implementation
 from icecream import ic # Debugging
-from numpy import median, std # Used for median of unrecognised genus (or new_genus), as well as standard deviation for distance counts
+from numpy import median, std, mean # Used for median of unrecognised genus (or new_genus), as well as standard deviation for distance counts
 from Bio import SeqIO # Used to parse fasta used to make tree to calculate genome lengths.
 import os # File finding
 
@@ -288,7 +288,7 @@ def tmp_output(df, original_df):
     original_df = original_df[original_df.Representative_phage == False]
     return original_df.drop(["Unnamed: 0","Representative_phage","Phage","DNA_Type"], axis = 1) # Remove redundant values from metadata merge
 
-def phylo_distance_genera(df, tree, distance_matrix):
+def phylo_distance_genera(df, tree, distance_matrix, stat_df):
     '''
     Aim is to calculate the average phylogenetic distance between phages within a genus. This function iterates over all unique genera within the sample
     and calculates pairwise distances between all phages within each genus. These values are then stored as a mean, median and standard deviations.
@@ -301,8 +301,8 @@ def phylo_distance_genera(df, tree, distance_matrix):
 
     genera = df["Genus"].unique().tolist()
     genera.remove("New_genus")
-    outfile = open("phage_genus_phylo_info.tsv","w")
-    outfile.write("Genus\tMedian\tStandardDeviation\n")
+    outfile = open("phage_mppt.tsv","w")
+    outfile.write("Genus\tMedian\tMean\tStandardDeviation\tAv_Size\tAv_GC\n")
     
     for genus in genera:
         phages = df.index[df["Genus"] == genus].tolist()
@@ -314,7 +314,13 @@ def phylo_distance_genera(df, tree, distance_matrix):
                 for i in range(c,len(phages)):
                     distances.append(distance_matrix(query.taxon, check_node(phages[i].replace("_"," "),tree).taxon))
                 c += 1
-            outfile.write(f"{genus}\t{median(distances)}\t{std(distances)}\n")
+            try:
+                size = stat_df.at[genus,"Median Genome Length (KB)"]
+                gc = stat_df.at[genus,"Median molGC (%)"]
+            except:
+                size = None
+                gc = None
+            outfile.write(f"{genus}\t{median(distances)}\t{mean(distances)}\t{std(distances)}\t{size}\t{gc}\n")
     outfile.close()
                 
             
@@ -328,6 +334,7 @@ def main():
     parser.add_argument("-l","--log", help="Outputs log of information to console, such as number of successful reads", action ="store_true")
     parser.add_argument("-i","--itol", help="Changes the output format to be compatable with iTOL dataset, color strip. Currently supports ~125 separate genera", action="store_true")
     parser.add_argument("-g","--genuscluster", help="Calculate clusters of new genus, under the label Maybevirus.", action="store_true")
+    parser.add_argument("-p","--phylodist", help="Calculate MPPD (Mean Pair-wise Phylogenetic Distance) of genera within inputted tree; stores as phage_mppd.tsv", action="store_true")
     parser.add_argument("-n","--name", help="Provides the suffix added to new genera groups (Maybevirus_SUFFIX), allowing for dataset specifc names. Default is NGC")
     parser.add_argument("-q","--query", help="Input the name of a node to output a list of neighours. Bypasses usual function of the script.")
     args = parser.parse_args()
@@ -390,7 +397,7 @@ def main():
         rep_df["Representative_phage"] = True
         rep_df.set_index("Genome",inplace=True)
     except:
-        raise ValueError("Expected representative phages found in metadata folder! Ensure 'representative_phages.tsv' and 'rep_phage_gen_complete.fasta' exists in Tree_check_metadata")
+        raise ValueError("Expected representative phages found in metadata folder! Ensure 'representative_phages_check_ready.tsv' exists in Tree_check_metadata")
     df.set_index("Genome", inplace=True)
     df = pd.concat([df, rep_df], ignore_index = False, sort=False) # Values of representative phages added, but labelled so they can be removed from output
     try:
@@ -412,7 +419,6 @@ def main():
     new_genus_subset = df[df["Genus"] == "New_genus"]
     
     if not new_genus_subset.empty and args.query == None:
-        
         print("\nMaking Distance Matrix...")
         distance_matrix = tree.phylogenetic_distance_matrix()
         print("\nDistance Matrix Made\n")
@@ -483,7 +489,8 @@ def main():
             output_df = tmp_output(output_df,df) # If provided with a TMP output, return an output in the same format (prefered!)
         except:
             print("\nNote: Outputting in basic format: No TMP file used.")
-        phylo_distance_genera(output_df, tree, distance_matrix)
+        if args.phylodist:
+            phylo_distance_genera(output_df, tree, distance_matrix, stat_df)
         output_df.to_csv("tree_checker_output.tsv",sep="\t")
         if args.log:
             print(f"\nSuccessfully parsed {complete_count} labelled New_genus\nFailed to parse {fail_count}\nUpdated {update_count} to neighbouring genus.\nPredict {num_new_genus} new genera clusters.")
