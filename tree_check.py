@@ -40,7 +40,7 @@ def read_file_tree(file_name):
 def read_fasta_length(file_name, input_df, rep = False):
     '''
     Reads in the fasta used during ViPTree to generate sequence lengths for all of the genomes.
-    Special formatting for the representative phages due to inconsistency of names between files.
+    Special formatting for the representative phages due to inconsistency of names between files (if used).
     '''
     merge_df = []
     if not rep:
@@ -136,20 +136,20 @@ def new_genus_cluster(df, distance_matrix, tree,suffix, d = 0.2, threshold = 4):
     '''
     label = 1 # Used for labelling the clusters
     adjusted = [] # Ensures once a phage has been changed, it isn't further changed
-    
-    for index, row in df.iterrows():
+    df_sub = df[df["Proposed Genus"] == "New_genus"] # Grab only new genus, as to not change any labelled phages
+    for index, row in df_sub.iterrows():
         counter = 0
         temp_store = []
-        if index not in adjusted and df.at[index,"Proposed Genus"] == "New_genus":
+        if index not in adjusted:
             query = check_node(index.replace("_"," "), tree) # Obtain the leaf data of the current query
             for node in tree.taxon_namespace:
                 string_node = str(node).replace("'","").replace(" ","_")
-                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df.index):
+                if distance_matrix(query.taxon,node) <= d and (string_node not in adjusted) and (string_node in df_sub.index):
                     counter += 1
                     temp_store.append(string_node)
             if counter >= threshold: # If a leaf has (threshold=4) or more new_genus neighbours, mark as a cluster
                 for phage in temp_store:
-                    df.at[phage,"Proposed Genus"] = ("Maybevirus_"+suffix+str(label))
+                    df.at[phage,"Proposed Genus"] = ("Maybevirus_"+suffix+str(label)) #Update actual df
                     adjusted.append(phage)
                 label += 1
     return df, label-1
@@ -293,7 +293,7 @@ def phylo_distance_genera(df, tree, distance_matrix, stat_df):
     Aim is to calculate the average phylogenetic distance between phages within a genus. This function iterates over all unique genera within the sample
     and calculates pairwise distances between all phages within each genus. These values are then stored as a mean, median and standard deviations.
 
-    Should be used without any Maybevirus calculations.
+    Can be used with Maybevirus classifications, but provides reduced information for such labels.
 
     Input: Finalised metadata, tree, distance matrix
     Output: .tsv with statistical information regarding the genera
@@ -334,9 +334,10 @@ def main():
     parser.add_argument("-l","--log", help="Outputs log of information to console, such as number of successful reads", action ="store_true")
     parser.add_argument("-i","--itol", help="Changes the output format to be compatable with iTOL dataset, color strip. Currently supports ~125 separate genera", action="store_true")
     parser.add_argument("-g","--genuscluster", help="Calculate clusters of new genus, under the label Maybevirus.", action="store_true")
-    parser.add_argument("-p","--phylodist", help="Calculate MPPD (Mean Pair-wise Phylogenetic Distance) of genera within inputted tree; stores as phage_mppd.tsv", action="store_true")
     parser.add_argument("-n","--name", help="Provides the suffix added to new genera groups (Maybevirus_SUFFIX), allowing for dataset specifc names. Default is NGC")
+    parser.add_argument("-t","--threshold", help="Sets the amount of phages required to form an NGC. Default value is 4")
     parser.add_argument("-q","--query", help="Input the name of a node to output a list of neighours. Bypasses usual function of the script.")
+    parser.add_argument("-p","--phylodist", help="Calculate Pylogenetic MPD (Pair-wise  Distance) of genera within inputted tree; stores as phage_mppd.tsv", action="store_true")
     args = parser.parse_args()
 
     PATH = args.path + "/"
@@ -350,6 +351,8 @@ def main():
         criteria = 0.9
     if args.name == None:
         args.name = "NGC"
+    if args.threshold == None:
+        args.threshold = 4
     ## File Handling
         
     dir_path = os.path.dirname(os.path.realpath(__file__)) + "/" + PATH
@@ -391,9 +394,6 @@ def main():
     try:
         rep_df = pd.read_csv("Tree_check_metadata/representative_phages_check_ready.tsv", sep="\t")
         rep_df = rep_df.rename(columns = {"Accession":"Genome","Genome":"DNA_Type"})
-        #rep_df["Genome"] = rep_df["Genome"].apply(lambda x: str(x).split('.',1)[0].split(' ',1)[0]) # Formatting for merging names with fasta headers
-        #rep_df = read_fasta_length("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df, True)
-        #rep_df = read_fasta_name("Tree_check_metadata/rep_phage_gen_complete.fasta",rep_df)
         rep_df["Representative_phage"] = True
         rep_df.set_index("Genome",inplace=True)
     except:
@@ -477,11 +477,11 @@ def main():
         output_df.set_index("Phage", inplace=True) # Current DB is a simple output reporting the new genus phages.
         
         if args.genuscluster:
-            output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name)
+            output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name, threshold = args.threshold)
         else:
             num_new_genus = "NA"
         if args.itol: # ITOL input (formatting)
-            output_df_itol = colour_code_output(output_df, df) # For use in ITol (copy/paste tsv into dataset)
+            output_df_itol = colour_code_output(output_df, df, False) # For use in ITol (copy/paste tsv into dataset)
             output_df_itol.to_csv("tree_checker_output_itol_genus.tsv",sep="\t", index=False)
             size_df = size_dataset_output(df)
             size_df.to_csv("tree_checker_output_itol_size.tsv",sep="\t",index=False)
