@@ -307,12 +307,13 @@ def phylo_distance_genera(df, tree, distance_matrix, stat_df):
     for genus in genera:
         phages = df.index[df["Genus"] == genus].tolist()
         if len(phages) > 3:
-            c = 1
+            c = 1 # Counter to prevent checking self
             distances = []
-            for n in phages:
+            for n in phages: # Pairwise checking
                 query = check_node(n.replace("_"," "), tree)
                 for i in range(c,len(phages)):
                     distances.append(distance_matrix(query.taxon, check_node(phages[i].replace("_"," "),tree).taxon))
+                    ic(genus, distance_matrix(query.taxon, check_node(phages[i].replace("_"," "),tree).taxon))
                 c += 1
             try:
                 size = stat_df.at[genus,"Median Genome Length (KB)"]
@@ -490,6 +491,7 @@ def main():
         except:
             print("\nNote: Outputting in basic format: No TMP file used.")
         if args.phylodist:
+            print("\nCalculating Phylogenetic MPD")
             phylo_distance_genera(output_df, tree, distance_matrix, stat_df)
         output_df.to_csv("tree_checker_output.tsv",sep="\t")
         if args.log:
