@@ -333,7 +333,7 @@ def main():
     parser.add_argument("-v", "--verbose", help="Significantly expand outputs for debugging", action="store_true")
     parser.add_argument("-s", "--strict", help="Enable stricter criteria for determining new genus (within 5%% of median)", action="store_true")
     parser.add_argument("-l","--log", help="Outputs log of information to console, such as number of successful reads", action ="store_true")
-    parser.add_argument("-i","--itol", help="Changes the output format to be compatable with iTOL dataset, color strip. Currently supports ~125 separate genera", action="store_true")
+    parser.add_argument("-i","--itol", help="Changes the output format to be compatible with iTOL dataset, colour strip. Currently supports ~125 separate genera", action="store_true")
     parser.add_argument("-g","--genuscluster", help="Calculate clusters of new genus, under the label Maybevirus.", action="store_true")
     parser.add_argument("-n","--name", help="Provides the suffix added to new genera groups (Maybevirus_SUFFIX), allowing for dataset specifc names. Default is NGC")
     parser.add_argument("-t","--threshold", help="Sets the amount of phages required to form an NGC. Default value is 4")
