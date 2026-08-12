@@ -1,0 +1,6 @@
+dendropy
+pandas
+argparse
+icecream
+numpy
+Bio
