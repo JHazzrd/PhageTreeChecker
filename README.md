@@ -36,5 +36,13 @@ Though _TreePhix_ does not require the list of representative genomes to work, t
 * representative_phage_get.py generates a list of representative phage genomes from the VMR dataset
 * representative_phage_genome_get retrieves the genomes associated
 * rep_phage_outliers_get.py retrieves the genomes that could not be found in the above process
+
 Please note that each script has numerous comments to state how errors should be dealt with, as some bacteriophages could not be found. These should be followed
 as to produce the same set of genomes used. 
+
+References:
+Millard, A. et al. (2025) 'taxMyPhage: Automated taxonomy of dsDNA phage genomes at the genus and species level', PHAGE (New Rochelle, N.Y.), 6(1), pp. 5–11. Available at: https://doi.org/10.1089/phage.2024.0050 .
+
+Nishimura, Y. et al. (2017) 'ViPTree: The viral proteomic tree server', Bioinformatics (Oxford, England), 33(15), pp. 2379–2380. Available at: https://doi.org/10.1093/bioinformatics/btx157 . 
+
+
