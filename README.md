@@ -40,6 +40,9 @@ Though _TreePhix_ does not require the list of representative genomes to work, t
 Please note that each script has numerous comments to state how errors should be dealt with, as some bacteriophages could not be found. These should be followed
 as to produce the same set of genomes used. 
 
+A full list of phage genomes used to create the representative phage list can be found in Tree_check_metadata/representative_phages_check_ready.tsv. A full list of all accession numbers can be found,
+as well as basic taxonomic information.
+
 References:
 Millard, A. et al. (2025) 'taxMyPhage: Automated taxonomy of dsDNA phage genomes at the genus and species level', PHAGE (New Rochelle, N.Y.), 6(1), pp. 5–11. Available at: https://doi.org/10.1089/phage.2024.0050 .
 
