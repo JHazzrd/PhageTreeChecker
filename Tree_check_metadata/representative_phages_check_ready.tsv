@@ -1083,7 +1083,6 @@ Elveevirus		Peduoviridae	KY271398	Klebsiella phage 4LV2017	dsDNA	33540
 Elveevirus		Peduoviridae	OV696611	Escherichia phage Cartapus	dsDNA	33368
 Entnonagintavirus		Peduoviridae	HQ110084	Erwinia phage ENT90	dsDNA	29564
 Evevirus		Peduoviridae	LR597637	Escherichia phage ESSI2_ev239	dsDNA	29203
-Felsduovirus		Peduoviridae	AE006468.2	Salmonella phage Fels2	dsDNA	4857450
 Felsduovirus		Peduoviridae	QUVN01000024.1	Salmonella phage IN60	dsDNA	34704
 Finvirus		Peduoviridae	CP038625.1	Arsenophonus phage FIN13	dsDNA	33626
 Firavirus		Peduoviridae	OM046624	Yersinia phage vB_YenM_42.18	dsDNA	36481
@@ -2796,13 +2795,7 @@ Micisonovirus		Occultatumviridae	MK765588	Tortoise microvirus 38 38_SP_76	ssDNA(
 Ascunsovirus		Tainaviridae	OM782324	Ascunsovirus oldenburgi ICBM5	ssDNA(+)	5581
 Circularivirus		Tainaviridae	MH617319.2	Microviridae sp. ctbc9 virus	ssDNA(+)	6009
 Pentonivirus		Tainaviridae	PP754850	Rhodobacter phage Ebor	ssDNA(+)	6611
-Bartonegtaviriform		Bartogtaviriformidae	BX897699.1	Bartonella gene transfer agent	dsDNA	1931047
-Brachyspigtaviriform		Brachygtaviriformidae	CP001357.1	Brachyspira hyodysenteriae gene transfer agent	dsDNA	3000694
 Cebaduodecimvirus		Obscuriviridae	KC821623.1	Cellulophaga phage phi12a:1	ssDNA	6478
 Cebaduodecimvirus		Obscuriviridae	KC821606.1	Cellulophaga phage phi12:2	ssDNA	6453
 Omtjevirus		Obscuriviridae	MT732445.1	Cellulophaga phage Omtje_1	ssDNA	6558
 Plasmavirus		Plasmaviridae	L13696.1	Acholeplasma phage L2	dsDNA	11965
-Dinogtaviriform		Rhodogtaviriformidae	CP000830.1	Dinoroseobacter shibae gene transfer agent	dsDNA	3789584
-Rhodobactegtaviriform		Rhodogtaviriformidae	CP001312.1	Rhodobacter capsulatus gene transfer agent	dsDNA	3738958
-Rhodovulugtaviriform		Rhodogtaviriformidae	CP015418.1	Rhodovulum sulfidophilum gene transfer agent	dsDNA	4132586
-Ruegerigtaviriform		Rhodogtaviriformidae	CP000031.2	Ruegeria pomeroyi gene transfer agent	dsDNA	4109437
