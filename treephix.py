@@ -1,7 +1,7 @@
 '''
 Script to determine if provided label of new_genus for a phage is true or false. Most logic is based on calculated median genome length of approx. 1,500
 phage genuses. If genus is unknown, calculated median of neighbouring genomes is used. Generally, the number of neighbours is not significant for calcuation;
-only the neighbouring genus has to be calcuateed (for the target value to then be looked up). Neighbouring genus is considered to be the genus of the closest phage,
+only the neighbouring genus has to be calculated (for the target value to then be looked up). Neighbouring genus is considered to be the genus of the closest phage,
 unless the closest neighbour is > 0.6 away, in which case it is considered that the query is a new genus. New genus clusters are also calculated, determining clusters of
 new_genus within a distance of 0.2. Phages originally under the new_genus label are also checked for size; those under 3kb have an additional label noting that they may
 be fragments / incomplete genomes.
@@ -11,7 +11,7 @@ These are ignored for the final output, and are generally invisible. The script 
 than running a large taxmyphage of both the representative phages + query. If, for whatever reason, a large taxmyphage summary is provided containing both, the script should
 still work.
 
-Input: Name of directory containing output from VipTree + TaxMyPhage
+Input: Name of directory containing output from VipTree + TaxMyPhage.
 
 Output: Update of TaxMyPhage output, with phages that have been updated in label (new_genus --> Existing) marked as changed, as well as new genus clusters described
 (under the temporary name Maybevirus_suffix)
@@ -50,7 +50,7 @@ def read_fasta_length(file_name, input_df, rep = False):
                      "Genome size": int(len(record.seq))}
                 merge_df.append(d)
         merge_df = pd.DataFrame(merge_df)
-    else:
+    else: # Special case for representative phage handling
         with open(file_name) as handle:
             for record in SeqIO.parse(handle,"fasta"):
                 d = {"Genome":str(record.id.split('.',1)[0]),
@@ -89,7 +89,6 @@ def neighbour_genus(query, neighbour, df, rep_df,distance_matrix):
     
     out = "New_genus"
     for n in neighbour:
-        #if n != "FO818745":
         if df.at[str(n).replace("'","").replace(" ","_"), "Genus"] != "New_genus" and distance_matrix(query.taxon, n) < 0.6:
             ic(df.at[str(n).replace("'","").replace(" ","_"), "Genus"], neighbour[0])
             return df.at[str(n).replace("'","").replace(" ","_"), "Genus"], n
@@ -377,7 +376,7 @@ def main():
         df["Representative_phage"] = False # If file not found, this causes the error
     except:
         raise ValueError(f"Expected metadata file named Summary_taxonomy.tsv within {PATH}")
-    try:
+    try: # Genome Size finding
         df["Genome size"] # Check if df already has genome size calculated (field name based on previous data examples)
         print("Using Genome Size from provided metadata.")
     except:
@@ -392,7 +391,7 @@ def main():
             print("Found FASTA!\t At: "+ PATH + loc.split(PATH)[1])
         except:
             raise ValueError(f"Expected fasta input within ViPTree Output")
-    try:
+    try: # Metadata for representative phages
         rep_df = pd.read_csv("Tree_check_metadata/representative_phages_check_ready.tsv", sep="\t")
         rep_df = rep_df.rename(columns = {"Accession":"Genome","Genome":"DNA_Type"})
         rep_df["Representative_phage"] = True
@@ -401,7 +400,7 @@ def main():
         raise ValueError("Expected representative phages found in metadata folder! Ensure 'representative_phages_check_ready.tsv' exists in Tree_check_metadata")
     df.set_index("Genome", inplace=True)
     df = pd.concat([df, rep_df], ignore_index = False, sort=False) # Values of representative phages added, but labelled so they can be removed from output
-    try:
+    try: # Metadata for genus stats
         stat_df = pd.read_csv("Tree_check_metadata/1612_phage_genome_stats.tsv", sep="\t")
     except:
         raise ValueError("Expected phage statistics in metadata folder! Ensure '1612_phage_genome_stats.tsv' exists in Tree_check_metadata")
@@ -431,7 +430,7 @@ def main():
 
             test_node = check_node(str(index).replace("_"," "), tree) # Query checked for existence and stored
 
-            ic("Query:",test_node.taxon)
+            ic("Query:",test_node.taxon) # Debug Messages
 
             neighbours = neighbour_search(test_node, tree, distance_matrix, n) # Find closest {n = 5} neighbours
             q_size = df.at[index,"Genome size"] / 1000 # df genome size in bp, not kbp
@@ -472,12 +471,12 @@ def main():
                     "Proposed Genus":n_genus,
                     "Error":error_flag,
                     "Fragment":frag_flag
-                }
+                } # Temporary database entry
             output_df.append(d)
         output_df = pd.DataFrame(output_df)
         output_df.set_index("Phage", inplace=True) # Current DB is a simple output reporting the new genus phages.
         
-        if args.genuscluster:
+        if args.genuscluster: # Maybevirus identification
             output_df,num_new_genus = new_genus_cluster(output_df, distance_matrix,tree, suffix = args.name, threshold = args.threshold)
         else:
             num_new_genus = "NA"
@@ -490,7 +489,7 @@ def main():
             output_df = tmp_output(output_df,df) # If provided with a TMP output, return an output in the same format (prefered!)
         except:
             print("\nNote: Outputting in basic format: No TMP file used.")
-        if args.phylodist:
+        if args.phylodist: # PMPD
             print("\nCalculating Phylogenetic MPD")
             phylo_distance_genera(output_df, tree, distance_matrix, stat_df)
         output_df.to_csv("tree_checker_output.tsv",sep="\t")
@@ -499,7 +498,7 @@ def main():
         print("\n>>>\tResults exported to file 'tree_checker_output.tsv'")
     else:
         print("\nNo Phages labelled 'New_genus' detected; nothing to compute.")
-        if args.query != None:
+        if args.query != None: # Find neighbours of an input.
             distance_matrix = tree.phylogenetic_distance_matrix()
             print("\nDistance Matrix Made\n")
             test = check_node(str(args.query).replace("_"," "),tree)
